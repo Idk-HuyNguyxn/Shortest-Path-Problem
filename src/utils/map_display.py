@@ -11,7 +11,7 @@ c.execute("SELECT id, lat, lon FROM nodes")
 nodes = {row[0]: (row[1], row[2]) for row in c.fetchall() } #lay toan bo dong va tra ve dang list id : (lat, lon)
 
 #lay Edges
-c.execute("SELECT from_node, to_node FROM edges")
+c.execute("SELECT from_node, to_node, status FROM edges")
 edges = c.fetchall()
 
 conn.close()
@@ -23,14 +23,22 @@ if nodes:
     avg_lat = sum(lat for lat, lon in nodes.values()) / len(nodes) # lat trung binh
     avg_lon = sum(lon for lat, lon in nodes.values()) / len(nodes) # lon trung binh
 else:
-    avg_lat, avg_lon = 0.0
+    avg_lat = 0.0
+    avg_lon = 0.0
     
-m = folium.Map(location = [avg_lat, avg_lon], zoom_start= 14 )
+m = folium.Map(location = [avg_lat, avg_lon], zoom_start= 15 )
 
 #Ve cac duong
-for from_node, to_node in edges:
+for from_node, to_node, status in edges:
     if from_node in nodes and to_node in nodes:
-        folium.PolyLine([nodes[from_node], nodes[to_node]], color = " blue ", weight = 1 ).add_to(m)
+        if status == "normal": color = "blue"
+        elif status == "block": color = "red"
+        else: color = "orange"
+        folium.PolyLine(
+            [ nodes[from_node], nodes[to_node] ],
+            color = color,
+            weight = 1
+        ).add_to(m)
         
 m.save("map.html")
 print("Map saved as map.html")
