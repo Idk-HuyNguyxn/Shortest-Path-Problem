@@ -19,12 +19,12 @@ conn.close()
 
 #Tao map folium
 
-if nodes:
-    avg_lat = sum(lat for lat, lon in nodes.values()) / len(nodes) # lat trung binh
-    avg_lon = sum(lon for lat, lon in nodes.values()) / len(nodes) # lon trung binh
-else:
-    avg_lat = 0.0
-    avg_lon = 0.0
+# if nodes:
+#     avg_lat = sum(lat for lat, lon in nodes.values()) / len(nodes) # lat trung binh
+#     avg_lon = sum(lon for lat, lon in nodes.values()) / len(nodes) # lon trung binh
+# else:
+avg_lat = 21.0357879
+avg_lon = 105.8276413
     
 m = folium.Map(location = [avg_lat, avg_lon], zoom_start= 15 )
 

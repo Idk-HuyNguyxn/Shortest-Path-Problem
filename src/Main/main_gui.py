@@ -1,5 +1,10 @@
 import sys
 import os
+os.environ["QT_ENABLE_HIGHDPI_SCALING"] = "1"
+os.environ["QT_DISABLE_FONT_HBASE"] = "1"
+os.environ["QTWEBENGINE_DISABLE_SANDBOX"] = "1"
+os.environ["QT_QPA_PLATFORM"] = "windows:fontengine=freetype"
+
 import tempfile
 import folium
 import json
@@ -17,6 +22,7 @@ from PyQt5.QtCore import QObject, pyqtSlot, QUrl
 from PyQt5.QtWebChannel import QWebChannel
 
 from utils.map_handler import load_graph_from_db
+from utils.map_handler import get_map_center
 from algorithms.AStar import AStar
 from algorithms.Dijkstra import Dijkstra
 
@@ -41,26 +47,13 @@ def find_nearest_node(lat, lon, nodes):
 
 def create_map_with_js(center):
     """
-    Tạo folium Map + thêm JS bắt sự kiện click
+    Tạo folium Map + thêm JS bắt sự kiện click + WebChannel
     """
-    m = folium.Map(location=center, zoom_start=16)
+    m = folium.Map(location=center, zoom_start=17)
 
-    # Inject JavaScript
-    click_js = """
-    function register_click_handler(pyHandler) {
-        map.on('click', function(e) {
-            var lat = e.latlng.lat;
-            var lng = e.latlng.lng;
-            pyHandler.onMapClick(lat, lng);
-        });
-    }
-    """
-    m.get_root().html.add_child(folium.Element(f"""
-        <script>
-        {click_js}
-        </script>
+    m.get_root().header.add_child(folium.Element("""
+        <script src="qrc:///qtwebchannel/qwebchannel.js"></script>
     """))
-
     return m
 
 
@@ -90,6 +83,7 @@ class JsBridge(QObject):
 
     @pyqtSlot(float, float)
     def onMapClick(self, lat, lon):
+        print("PY received click:", lat, lon)
         self.gui.map_clicked(lat, lon)
 
 
@@ -128,10 +122,10 @@ class MapGUI(QWidget):
         layout.addWidget(self.web)
 
         # Create map
-        center = list(self.nodes.values())[0] if self.nodes else (0, 0)
-        m = create_map_with_js(center)
+        lat_avg, lon_avg = get_map_center()
+        m = create_map_with_js((lat_avg, lon_avg))
         save_map(m)
-
+        
         # Setup JS bridge
         self.channel = QWebChannel()
         self.js_bridge = JsBridge(self)
@@ -145,11 +139,43 @@ class MapGUI(QWidget):
         self.web.loadFinished.connect(self.inject_js)
 
     def inject_js(self):
-        self.web.page().runJavaScript("""
-            if (typeof register_click_handler !== 'undefined') {
-                register_click_handler(pyHandler);
-            }
-        """)
+        init_js = r"""
+            (function() {
+                function waitForTransport(cb) {
+                    if (typeof qt !== 'undefined' && qt.webChannelTransport) return cb();
+                    setTimeout(function(){ waitForTransport(cb); }, 50);
+                }
+
+                waitForTransport(function() {
+                    new QWebChannel(qt.webChannelTransport, function(channel) {
+                        window.pyHandler = channel.objects.pyHandler;
+
+                        function attachClickToMap() {
+                            // tìm biến map dạng map_xxx
+                            let keys = Object.keys(window)
+                                .filter(k => k.startsWith("map_"));
+
+                            if (keys.length === 0) {
+                                setTimeout(attachClickToMap, 50);
+                                return;
+                            }
+
+                            let mapObj = window[keys[0]];
+                            if (!mapObj._py_click_attached) {
+                                mapObj._py_click_attached = true;
+
+                                mapObj.on('click', function(e) {
+                                    pyHandler.onMapClick(e.latlng.lat, e.latlng.lng);
+                                });
+                            }
+                        }
+
+                        attachClickToMap();
+                    });
+                });
+            })();
+        """
+        self.web.page().runJavaScript(init_js)
 
     # ---------------------------
     # Khi click lên map
@@ -201,10 +227,11 @@ class MapGUI(QWidget):
         self.start_node = None
         self.goal_node = None
 
-        center = list(self.nodes.values())[0]
-        m = create_map_with_js(center)
+        lat_avg, lon_avg = get_map_center()  # dùng center trung bình
+        m = create_map_with_js((lat_avg, lon_avg))
         save_map(m)
         self.web.reload()
+
 
 
 # ---------------------------
@@ -215,3 +242,7 @@ def main_Gui():
     gui = MapGUI()
     gui.show()
     return app.exec_()
+
+if __name__ == "__main__":
+    main_Gui()
+

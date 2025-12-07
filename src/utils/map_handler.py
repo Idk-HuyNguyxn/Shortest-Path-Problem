@@ -1,7 +1,9 @@
 import sqlite3
+import os
 from typing import Dict, Tuple, List, Any
 
-DB_PATH = "map_data.db"
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DB_PATH = os.path.join(BASE_DIR, "map_data.db")
 #lay toan bo nodes tu DB va tra ve dict: {id : (lat, lon)}
 def get_all_nodes(db_path: str = DB_PATH) -> Dict[int, Tuple[float, float]]:
     #tra ve dang dict: {node_id : (lat, lon)}
@@ -79,8 +81,18 @@ def build_graph(nodes: Dict[int, Tuple[float, float]],
 
 def load_graph_from_db(db_path: str = DB_PATH):
 #load nodes, edges tu DB va build graph, tra ve graph: {node_id : [(neighbor, len), ...]} va coords: {node_id: (lat, lon)}
-    coords = get_all_nodes(db_path)
+    nodes = get_all_nodes(db_path)
     edges = get_all_edges(db_path)
-    graph = build_graph(coords, edges)
-    return graph, coords
+    graph = build_graph(nodes, edges)
+    return graph, nodes
+
+def get_map_center():
+    nodes = get_all_nodes()
+    if not nodes:
+        return  21.0357, 105.8276
+
+    lats = [lat for (lat, lon) in nodes.values()]
+    lons = [lon for (lat, lon) in nodes.values()]
+    return sum(lats)/len(lats), sum(lons)/len(lons)
+
     
