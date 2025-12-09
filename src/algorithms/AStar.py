@@ -1,5 +1,5 @@
 import heapq
-from .heuristic import haversine
+from heuristic import haversine
 from typing import Dict, List, Tuple, Any
 INF = float("inf")
 
