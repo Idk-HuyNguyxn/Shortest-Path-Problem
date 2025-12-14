@@ -1,6 +1,6 @@
 # src/main.py
 from utils.map_handler import build_graph, get_all_nodes, get_all_edges
-from algorithms import AStar, Dijkstra
+from algorithms import AStar, dijkstra
 
 def main():
     print("Loading graph from database...")

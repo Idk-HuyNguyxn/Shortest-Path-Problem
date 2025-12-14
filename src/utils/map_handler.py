@@ -63,14 +63,13 @@ def build_graph(nodes: Dict[int, Tuple[float, float]],
     graph: Dict[int, List[Tuple[int, float]]] = {node_id: [] for node_id in nodes}
 
     for e in edges:
-        if e["status"] == "block":
-            continue
 
         u = e["u"]
         v = e["v"]
-        w = float(e.get("length", 0.0))
-
         if u not in graph or v not in graph:
+            continue
+        w = float(e.get("length", 0.0))
+        if e["status"] == "block":
             continue
 
         graph[u].append((v, w))
