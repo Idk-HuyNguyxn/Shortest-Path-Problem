@@ -23,8 +23,8 @@ from PyQt5.QtWebChannel import QWebChannel
 
 from utils.map_handler import load_graph_from_db
 from utils.map_handler import get_map_center
-from algorithms.AStar import AStar
-from algorithms.Dijkstra import Dijkstra
+from algorithms.astar import astar
+from algorithms.dijkstra import dijkstra
 
 MAP_HTML = os.path.join(tempfile.gettempdir(), "map_gui_click.html")
 
@@ -203,12 +203,12 @@ class MapGUI(QWidget):
         algo = self.alg.currentText()
 
         if algo == "A*":
-            path = AStar(self.graph, self.nodes, self.start_node, self.goal_node)
+            path = astar(self.graph, self.nodes, self.start_node, self.goal_node)
             if path is None:
                 QMessageBox.warning(self, "Error", "No path found by A*")
                 return
         else:
-            path, dist = Dijkstra(self.graph, self.nodes, self.start_node, self.goal_node)
+            path, dist = dijkstra(self.graph, self.nodes, self.start_node, self.goal_node)
             if path is None:
                 QMessageBox.warning(self, "Error", "No path found by Dijkstra")
                 return
@@ -245,4 +245,3 @@ def main_Gui():
 
 if __name__ == "__main__":
     main_Gui()
-

@@ -1,11 +1,11 @@
 import math
 from typing import Dict, Tuple, List, Any
 import heapq
-def Dijkstra(
+def dijkstra(
     graph: Dict[Any, List[Tuple[Any, float]]],
     nodes: Dict[Any, Tuple[float, float]],
-    start: float,
-    goal: float
+    start: Any,
+    goal: Any
 ):
     pq = []
     heapq.heappush(pq, (0, start))

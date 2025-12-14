@@ -3,11 +3,11 @@ from .heuristic import haversine
 from typing import Dict, List, Tuple, Any
 INF = float("inf")
 
-def AStar(
+def astar(
     graph: Dict[Any, List[Tuple[Any, float]]],
     nodes: Dict[Any, Tuple[float, float]],
-    start: float,
-    goal: float
+    start: Any,
+    goal: Any
 ):
     g = {n : INF for n in graph}
     g[start] = 0

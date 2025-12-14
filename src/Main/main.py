@@ -1,6 +1,7 @@
 # src/main.py
 from utils.map_handler import build_graph, get_all_nodes, get_all_edges
-from algorithms import AStar, Dijkstra
+from algorithms.dijkstra import dijkstra
+from algorithms.astar import astar
 
 def main():
     print("Loading graph from database...")
@@ -15,12 +16,12 @@ def main():
     start = 1
     goal = 10
     print("\n=== A* SEARCH ===")
-    path = AStar(graph, nodes, start, goal)
+    path = astar(graph, nodes, start, goal)
     print("A* Path:", path)
 
     # --- TEST 2: Dijkstra ---
     print("\n=== DIJKSTRA ===")
-    path2, dist2 = Dijkstra(graph, nodes, start, goal)
+    path2, dist2 = dijkstra(graph, nodes, start, goal)
     print("Dijkstra Path:", path2)
     print("Distance:", dist2)
 
