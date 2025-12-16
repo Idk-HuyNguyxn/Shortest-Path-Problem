@@ -72,6 +72,27 @@ def draw_path_on_map(m, nodes, path):
 
     folium.PolyLine(coords, color="blue", weight=6).add_to(m)
 
+def draw_bloked_path(m,nodes):
+    blocked_list = get_blocked_edges()
+
+    if not blocked_list:
+        return
+
+    for u, v, status in blocked_list:
+        if u in nodes and v in nodes:
+            coords = [nodes[u], nodes[v]]
+            if status == 'flood':
+                color = "cyan"      
+                tooltip = "FLOOD (Ngập lụt)"
+            elif status == 'block':
+                color = "red"      
+                tooltip = "BLOCKED (Cấm đường)"
+            elif status =='traffic':
+                color = "orange"
+                tooltip = "TRAFFIC (Tắc)"
+
+            folium.PolyLine(locations=coords,color=color,tooltip=tooltip).add_to(m)
+
 
 # -------------------------------
 # Object nhận sự kiện từ JavaScript
@@ -124,6 +145,7 @@ class MapGUI(QWidget):
         # Create map
         lat_avg, lon_avg = get_map_center()
         m = create_map_with_js((lat_avg, lon_avg))
+        draw_bloked_path(m,self.nodes)
         save_map(m)
         
         # Setup JS bridge
@@ -216,6 +238,7 @@ class MapGUI(QWidget):
         # tạo map mới
         m = create_map_with_js(self.nodes[self.start_node])
         draw_path_on_map(m, self.nodes, path)
+        draw_bloked_path(m,self.nodes)
         save_map(m)
 
         self.web.reload()
