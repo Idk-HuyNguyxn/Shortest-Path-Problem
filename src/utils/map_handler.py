@@ -55,7 +55,14 @@ def set_edge_status(edge_id: int, status: str, db_path: str = DB_PATH) -> None:
         c.execute("UPDATE edges SET status = ? WHERE id = ?", (status, edge_id))
         conn.commit()
 
-
+def get_blocked_edges(db_path:str= DB_PATH):
+    block_edges=[]
+    with sqlite3.connect(db_path) as conn:
+        c = conn.cursor()
+        c.execute("SELECT from_node, to_node, status FROM edges WHERE status IN ('block', 'flood', 'traffic') ")
+        row = c.fetchall()
+    return row
+    
 def build_graph(nodes: Dict[int, Tuple[float, float]],
                 edges: List[Dict[str, Any]]) -> Dict[int, List[Tuple[int, float]]]:
 #tao ds ke graph: graph[node_id] = [(neighbor_id, length), ...]
