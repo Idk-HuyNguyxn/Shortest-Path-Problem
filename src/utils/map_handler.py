@@ -69,19 +69,38 @@ def build_graph(nodes: Dict[int, Tuple[float, float]],
     # nodes: {id: (lat, lon)} -> key la node_id
     graph: Dict[int, List[Tuple[int, float]]] = {node_id: [] for node_id in nodes}
 
+    blocked_pairs = set()
+    flood_road = set()
+    traffic_road = set()
     for e in edges:
+        if e.get("status") == "block":
+            u, v = e["u"], e["v"]
+            blocked_pairs.add((u, v))
+            blocked_pairs.add((v, u))
 
-        u = e["u"]
-        v = e["v"]
-        if u not in graph or v not in graph:
+    for e in edges:
+        u, v = e["u"], e["v"]
+        
+        if (u, v) in blocked_pairs:
             continue
-        w = float(e.get("length", 0.0))
-        if e["status"] == "block":
-            continue
+        elif (u, v) in traffic_road:
+            w=2*float(e.get("length",0.0))
+        elif (u,v) in flood_road:
+            w=3*float(e.get("length",0.0))
+        else:
+            base_w = float(e.get("length", 0.0))
+            status = e.get("status", "normal")
+            if status == "traffic":
+                w = base_w * 2
+                traffic_road.add((v,u))
+            elif status == "flood":
+                w = base_w * 3
+                flood_road.add((v,u))
+            else:
+                w = base_w
 
-        graph[u].append((v, w))
-        if int(e.get("oneway", 0)) == 0:
-            graph[v].append((u, w))
+        if u in graph and v in graph:
+            graph[u].append((v, w))
     return graph
 
 
