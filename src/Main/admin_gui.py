@@ -66,6 +66,10 @@ class AdminGUI(QWidget):
         self.mode = "edge"
         self.poly_edges = []            # edges đang chọn polygon
         self.highlight_edges_list = []  # edges highlight tạm
+        
+        # Polygon state
+        self.polygon_active = False
+        self.polygon_points = []
 
         # JS bridge
         self.channel = QWebChannel()
@@ -119,6 +123,8 @@ class AdminGUI(QWidget):
     # ---------------- Inject JS ----------------
     def inject_js(self):
         js = r"""
+        console.log("qt =", typeof qt);
+        console.log("transport =", qt && qt.webChannelTransport);
         (function() {
             function waitForTransport(cb) {
                 if (typeof qt !== 'undefined' && qt.webChannelTransport) return cb();
@@ -128,23 +134,33 @@ class AdminGUI(QWidget):
             waitForTransport(function() {
                 new QWebChannel(qt.webChannelTransport, function(channel) {
                     window.pyHandler = channel.objects.pyHandler;
+
                     function attachClick() {
                         let keys = Object.keys(window).filter(k => k.startsWith("map_"));
-                        if (keys.length === 0) { setTimeout(attachClick, 50); return; }
+                        if (keys.length === 0) {
+                            setTimeout(attachClick, 50);
+                            return;
+                        }
+
                         let mapObj = window[keys[0]];
-                        if (!mapObj._py_click_attached) {
-                            mapObj._py_click_attached = true;
+                        if (mapObj._py_click_attached) return;
+                        mapObj._py_click_attached = true;
+
+                        mapObj.whenReady(function() {
                             mapObj.on('click', function(e) {
                                 pyHandler.onMapClick(e.latlng.lat, e.latlng.lng);
                             });
-                        }
+                            console.log("Python click handler attached");
+                        });
                     }
+
                     attachClick();
                 });
             });
         })();
         """
         self.web.page().runJavaScript(js)
+
 
     # ---------------- Mode ----------------
     def set_mode(self, mode):
@@ -155,10 +171,11 @@ class AdminGUI(QWidget):
 
     # ---------------- Map click ----------------
     def map_click(self, lat, lon):
+        print(f"[CLICK] mode={self.mode} lat={lat} lon={lon}")
         if self.mode == "edge":
             self.select_edge(lat, lon)
         elif self.mode == "polygon":
-            self.toggle_polygon_edge(lat, lon)
+            self.polygon_click(lat, lon)
 
     # ---------------- Edge Mode ----------------
     def select_edge(self, lat, lon):
@@ -174,20 +191,143 @@ class AdminGUI(QWidget):
             self.update_edge_color(edge, status)
 
     # ---------------- Polygon Mode ----------------
-    def toggle_polygon_edge(self, lat, lon):
-        edge = self.nearest_edge(lat, lon)
-        if not edge:
+    def point_in_polygon(self, point, polygon):
+        x, y = point
+        inside = False
+        n = len(polygon)
+        for i in range(n):
+            x1, y1 = polygon[i]
+            x2, y2 = polygon[(i+1) % n]
+            
+            if( (y1 > y ) != (y2 > y) ):
+                xinters = (y - y1)*(x2 - x1) / (y2 - y1 + 1e-9 ) + x1
+                if x < xinters:
+                    inside = not inside
+        return inside
+    
+    def edge_in_polygon(self, edge, polygon):
+        u, v = edge["u"], edge["v"]
+        
+        p1 = self.nodes[u]
+        p2 = self.nodes[v]
+        
+        return (
+            self.point_in_polygon(p1, polygon)
+            and
+            self.point_in_polygon(p2, polygon)
+        )
+        
+    def select_edges_in_polygon(self, polygon_points):
+        self.poly_edges.clear()
+        self.highlight_edges_list.clear()
+        
+        for edge in self.edges:
+            if self.edge_in_polygon(edge, polygon_points):
+                self.poly_edges.append(edge)
+                self.highlight_edges_list.append(edge)
+                self.update_edge_color(edge, "green")
+            else:
+                self.update_edge_color(edge, edge["status"])
+                
+    def polygon_click(self, lat, lon):
+        print("[POLYGON CLICK]", lat, lon)
+        if not self.polygon_active:
+            self.polygon_active = True
+            self.polygon_points = [(lat, lon)]
             return
-        if edge in self.poly_edges:
-            # Bỏ chọn
-            self.poly_edges.remove(edge)
-            self.highlight_edges_list.remove(edge)
-            self.update_edge_color(edge, edge["status"])
-        else:
-            # Chọn
-            self.poly_edges.append(edge)
-            self.highlight_edges_list.append(edge)
-            self.update_edge_color(edge, "green")
+        first = self.polygon_points[0]
+        current = (lat, lon)
+        
+        if len(self.polygon_points) >= 3 and self.isclose(current, first):
+            self.polygon_active = False
+            self.finalize_polygon()
+            return
+        self.polygon_points.append(current)
+        self.draw_polygon_preview()
+        
+    def isclose(self, p1, p2 ):
+        return abs(p1[0] - p2[0]) < 0.0001 and abs(p1[1] - p2[1] ) < 0.0001
+    
+    def finalize_polygon(self):
+        if len(self.polygon_points) < 3:
+            return
+        self.draw_polygon_final()
+        self.select_edges_in_polygon(self.polygon_points)
+    
+    # def toggle_polygon_edge(self, lat, lon):
+    #     edge = self.nearest_edge(lat, lon)
+    #     if not edge:
+    #         return
+    #     if edge in self.poly_edges:
+    #         # Bỏ chọn
+    #         self.poly_edges.remove(edge)
+    #         self.highlight_edges_list.remove(edge)
+    #         self.update_edge_color(edge, edge["status"])
+    #     else:
+    #         # Chọn
+    #         self.poly_edges.append(edge)
+    #         self.highlight_edges_list.append(edge)
+    #         self.update_edge_color(edge, "green")
+
+    def draw_polygon_preview(self):
+        if len(self.polygon_points) < 2:
+            return
+
+        coords_js = [[lat, lon] for lat, lon in self.polygon_points]
+
+        js = f"""
+        (function(){{
+            let keys = Object.keys(window).filter(k => k.startsWith("map_"));
+            if(keys.length === 0) return;
+            let map = window[keys[0]];
+
+            if(window._polygonPreview){{
+                map.removeLayer(window._polygonPreview);
+            }}
+
+            window._polygonPreview = L.polyline(
+                {coords_js},
+                {{
+                    color: 'green',
+                    weight: 3,
+                    dashArray: '5,5'
+                }}
+            ).addTo(map);
+        }})();
+        """
+        self.web.page().runJavaScript(js)
+
+    
+    def draw_polygon_final(self):
+        if len(self.polygon_points) < 3:
+            return
+
+        pts = self.polygon_points + [self.polygon_points[0]]
+        coords_js = [[lat, lon] for lat, lon in pts]
+
+        js = f"""
+        (function(){{
+            let keys = Object.keys(window).filter(k => k.startsWith("map_"));
+            if(keys.length === 0) return;
+            let map = window[keys[0]];
+
+            if(window._polygonFinal){{
+                map.removeLayer(window._polygonFinal);
+            }}
+
+            window._polygonFinal = L.polyline(
+                {coords_js},
+                {{
+                    color: 'green',
+                    weight: 4
+                }}
+            ).addTo(map);
+        }})();
+        """
+
+        self.web.page().runJavaScript(js)
+
+
 
     def finish_polygon(self):
         if not self.poly_edges:
@@ -201,14 +341,38 @@ class AdminGUI(QWidget):
         if not ok:
             return
 
+        # Cập nhật status edges
+        for edge in self.poly_edges:
+            edge["status"] = status
+            set_edge_status(edge["edge_id"], status)
+
+        # Reset polygon state
         self.highlight_edges_list.clear()
-
-        for e in self.poly_edges:
-            e["status"] = status
-            set_edge_status(e["edge_id"], status)
-            self.update_edge_color(e, status)
-
         self.poly_edges.clear()
+        self.polygon_points.clear()
+        self.polygon_active = False
+
+        # JS: xóa polygon preview + final
+        js_clear_polygon = """
+        (function(){
+            let keys = Object.keys(window).filter(k => k.startsWith("map_"));
+            if(keys.length === 0) return;
+            let map = window[keys[0]];
+            if(window._polygonPreview){
+                map.removeLayer(window._polygonPreview);
+                window._polygonPreview = null;
+            }
+            if(window._polygonFinal){
+                map.removeLayer(window._polygonFinal);
+                window._polygonFinal = null;
+            }
+        })();
+        """
+        self.web.page().runJavaScript(js_clear_polygon)
+
+        # JS: cập nhật màu tất cả edges theo status mới
+        for edge in self.edges:
+            self.update_edge_color(edge, edge.get("status", "normal"))
 
     # ---------------- Update edge color ----------------
     def update_edge_color(self, edge, status):

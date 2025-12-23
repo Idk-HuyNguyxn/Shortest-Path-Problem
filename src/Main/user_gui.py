@@ -23,6 +23,7 @@ from PyQt5.QtWebChannel import QWebChannel
 
 from utils.map_handler import load_graph_from_db
 from utils.map_handler import get_map_center
+from utils.map_handler import get_blocked_edges
 from algorithms.astar import astar
 from algorithms.dijkstra import dijkstra
 
@@ -114,7 +115,7 @@ class JsBridge(QObject):
 class MapGUI(QWidget):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("A* + Dijkstra Map Selector")
+        self.setWindowTitle("Shortest Path Project")
         self.resize(1000, 700)
 
         # load DB
@@ -128,7 +129,7 @@ class MapGUI(QWidget):
 
         # control bar
         bar = QHBoxLayout()
-        self.alg = QComboBox()
+        self.alg = QComboBox() #dropbox
         self.alg.addItems(["A*", "Dijkstra"])
         self.clear_btn = QPushButton("Clear")
         self.clear_btn.clicked.connect(self.reset_selection)
@@ -149,13 +150,13 @@ class MapGUI(QWidget):
         save_map(m)
         
         # Setup JS bridge
-        self.channel = QWebChannel()
+        self.channel = QWebChannel() #js goi python
         self.js_bridge = JsBridge(self)
         self.channel.registerObject("pyHandler", self.js_bridge)
         self.web.page().setWebChannel(self.channel)
 
         # Load HTML
-        self.web.load(QUrl.fromLocalFile(MAP_HTML))
+        self.web.load(QUrl.fromLocalFile(MAP_HTML)) # load file html
 
         # Inject JS to connect click handler
         self.web.loadFinished.connect(self.inject_js)
